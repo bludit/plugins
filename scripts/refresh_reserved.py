@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate data/reserved.json from a Bludit checkout.
+"""Regenerate rules/reserved.json from a Bludit checkout.
 
 The directory needs to know which plugin ids ship with Bludit and which class
 names are already taken, so a submission colliding with core is rejected before
@@ -58,7 +58,7 @@ def main():
         "reservedClassNames": sorted(reserved),
     }
 
-    target = os.path.join(ROOT, "data", "reserved.json")
+    target = os.path.join(ROOT, "rules", "reserved.json")
     with open(target, "w") as fh:
         json.dump(payload, fh, indent=2)
         fh.write("\n")

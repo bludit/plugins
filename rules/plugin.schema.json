@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/bludit/plugins/main/schema/plugin.schema.json",
+  "$id": "https://raw.githubusercontent.com/bludit/plugins/main/rules/plugin.schema.json",
   "title": "Bludit plugin submission",
   "description": "One file per plugin inside plugins/. The filename must be <id>.json. Fields derived by CI (sha256, size) must not be present.",
   "type": "object",

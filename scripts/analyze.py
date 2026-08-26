@@ -122,7 +122,7 @@ class Report:
 # ---------------------------------------------------------------------------
 
 def load_reserved():
-    with open(os.path.join(ROOT, "data", "reserved.json")) as fh:
+    with open(os.path.join(ROOT, "rules", "reserved.json")) as fh:
         return json.load(fh)
 
 
@@ -181,13 +181,13 @@ def check_submission(path, report):
 
 
 def validate_schema(data):
-    """Validate against schema/plugin.schema.json.
+    """Validate against rules/plugin.schema.json.
 
     Uses jsonschema when it is installed, otherwise falls back to a check of
     the required fields and their patterns so the script still runs locally
     without any dependency.
     """
-    with open(os.path.join(ROOT, "schema", "plugin.schema.json")) as fh:
+    with open(os.path.join(ROOT, "rules", "plugin.schema.json")) as fh:
         schema = json.load(fh)
 
     try:
