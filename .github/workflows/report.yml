@@ -1,0 +1,148 @@
+# Post the result of analyze.yml as a comment on the pull request.
+#
+# SECURITY: this workflow has write permissions, so it must never run any code
+# that came from the pull request. It checks out the trusted default branch,
+# reads only the JSON report produced by analyze.yml, and renders the comment
+# from a template. The report is treated as untrusted data and escaped.
+
+name: Report
+
+on:
+  workflow_run:
+    workflows: ['Analyze']
+    types:
+      - completed
+
+permissions:
+  contents: read
+  pull-requests: write
+  # Needed to download the artifact produced by the analyze workflow
+  actions: read
+
+jobs:
+  report:
+    name: Comment on the pull request
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'pull_request'
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout the default branch, never the pull request
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download the report produced by the analyzer
+        uses: actions/download-artifact@v4
+        with:
+          name: analyzer-report
+          path: analyzer-report
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Render the comment
+        id: render
+        run: |
+          if [ ! -f analyzer-report/pr-number.txt ]; then
+            echo "No report to publish."
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PR=$(cat analyzer-report/pr-number.txt | tr -dc '0-9')
+          if [ -z "${PR}" ]; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "pr=${PR}" >> "$GITHUB_OUTPUT"
+
+          python3 - <<'PYTHON' > comment.md
+          import glob, json, os, sys
+          sys.path.insert(0, 'scripts')
+          from render import render, MARKER
+
+          reports = sorted(p for p in glob.glob('analyzer-report/*.json'))
+          if not reports:
+              print(MARKER)
+              print('## Plugin check')
+              print()
+              print('No submission was changed by this pull request.')
+              raise SystemExit(0)
+
+          bodies = []
+          errors = warnings = 0
+          for path in reports:
+              with open(path) as fh:
+                  data = json.load(fh)
+              errors += data.get('errors', 0)
+              warnings += data.get('warnings', 0)
+              body = render(data)
+              bodies.append(body.replace(MARKER + '\n', '', 1))
+
+          print(MARKER)
+          print('\n---\n'.join(bodies))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
+              fh.write('errors=%d\n' % errors)
+              fh.write('warnings=%d\n' % warnings)
+          PYTHON
+
+      - name: Post or update the comment
+        if: steps.render.outputs.skip != '1'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('comment.md', 'utf8');
+            const marker = '<!-- bludit-plugin-analyzer -->';
+            const issue_number = Number('${{ steps.render.outputs.pr }}');
+            const { owner, repo } = context.repo;
+
+            // One sticky comment: find the previous one and edit it in place
+            const comments = await github.paginate(
+              github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 }
+            );
+            const previous = comments.find(
+              c => c.user.type === 'Bot' && c.body && c.body.includes(marker)
+            );
+
+            if (previous) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Set the labels
+        if: steps.render.outputs.skip != '1'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue_number = Number('${{ steps.render.outputs.pr }}');
+            const { owner, repo } = context.repo;
+            const errors = Number('${{ steps.render.outputs.errors }}' || 0);
+            const warnings = Number('${{ steps.render.outputs.warnings }}' || 0);
+
+            const managed = ['needs-changes', 'needs-review', 'ready-to-merge'];
+            const wanted = errors > 0 ? 'needs-changes'
+                         : warnings > 0 ? 'needs-review'
+                         : 'ready-to-merge';
+
+            const current = await github.paginate(
+              github.rest.issues.listLabelsOnIssue, { owner, repo, issue_number, per_page: 100 }
+            );
+
+            // The three labels are mutually exclusive, drop the stale ones
+            for (const label of current) {
+              if (managed.includes(label.name) && label.name !== wanted) {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number, name: label.name })
+                  .catch(() => {});
+              }
+            }
+            if (!current.some(l => l.name === wanted)) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: [wanted] })
+                .catch(() => {});
+            }

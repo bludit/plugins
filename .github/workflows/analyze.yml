@@ -1,0 +1,86 @@
+# Analyze the plugin submissions changed by a pull request.
+#
+# SECURITY: this workflow downloads and inspects code supplied by whoever opened
+# the pull request. It therefore runs with a read-only token and no secrets, and
+# it never comments. Posting the result is the job of report.yml, which runs
+# separately with write permissions and never executes any of this code.
+#
+# Do NOT change the trigger to pull_request_target and do NOT add write
+# permissions here. That combination would hand a writable token to untrusted
+# code and is the exact shape of the attack this split prevents.
+
+name: Analyze
+
+on:
+  pull_request:
+    paths:
+      - 'plugins/**'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze submissions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout the pull request
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install jsonschema
+        run: python -m pip install --quiet jsonschema
+
+      - name: Show the PHP version used for the source checks
+        run: php --version
+
+      - name: Find the submissions changed by this pull request
+        id: changed
+        run: |
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          CHANGED=$(git diff --name-only --diff-filter=d \
+            "origin/${{ github.base_ref }}...HEAD" -- 'plugins/*.json' | tr '\n' ' ')
+          echo "files=${CHANGED}" >> "$GITHUB_OUTPUT"
+          if [ -z "${CHANGED}" ]; then
+            echo "No submission changed by this pull request."
+          else
+            echo "Changed: ${CHANGED}"
+          fi
+
+      - name: Analyze
+        id: analyze
+        run: |
+          mkdir -p analyzer-report
+          echo "${{ github.event.pull_request.number }}" > analyzer-report/pr-number.txt
+
+          STATUS=0
+          for FILE in ${{ steps.changed.outputs.files }}; do
+            NAME=$(basename "${FILE}" .json)
+            echo "::group::${NAME}"
+            python3 scripts/analyze.py "${FILE}" \
+              --report "analyzer-report/${NAME}.json" || STATUS=1
+            echo "::endgroup::"
+          done
+          echo "status=${STATUS}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload the report
+        uses: actions/upload-artifact@v4
+        with:
+          name: analyzer-report
+          path: analyzer-report/
+          retention-days: 7
+
+      - name: Fail when there is at least one error
+        if: steps.analyze.outputs.status != '0'
+        run: |
+          echo "The analyzer found errors. The details are posted as a comment on the pull request."
+          exit 1

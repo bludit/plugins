@@ -1,0 +1,74 @@
+# Build and publish a Bludit plugin as a release asset.
+#
+# Copy this file into your own plugin repository as
+# .github/workflows/release.yml, change PLUGIN_ID to the directory name your
+# plugin uses inside bl-plugins, then push a tag:
+#
+#     git tag v1.0.0 && git push origin v1.0.0
+#
+# The workflow builds <plugin-id>.zip with the plugin inside a single directory
+# named after the plugin, attaches it to the release, and prints the sha256.
+# That zip is what the `download` field of your submission points at.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      # The directory name Bludit creates inside bl-plugins
+      PLUGIN_ID: hello-world
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the version in metadata.json matches the tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VERSION=$(python3 -c "import json;print(json.load(open('metadata.json'))['version'])")
+          if [ "${TAG}" != "${VERSION}" ]; then
+            echo "The tag is ${TAG} but metadata.json says ${VERSION}."
+            echo "They must match, the plugins directory checks this too."
+            exit 1
+          fi
+          echo "Version ${VERSION}"
+
+      - name: Build the zip
+        run: |
+          mkdir -p build/"${PLUGIN_ID}"
+          # Everything except the repository plumbing and the docs
+          rsync -a ./ build/"${PLUGIN_ID}"/ \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'build' \
+            --exclude '.gitignore' \
+            --exclude 'README.md' \
+            --exclude '.DS_Store' \
+            --exclude 'node_modules'
+
+          # A plugin needs these three, fail early rather than shipping a broken zip
+          for REQUIRED in plugin.php metadata.json languages/en.json; do
+            if [ ! -f "build/${PLUGIN_ID}/${REQUIRED}" ]; then
+              echo "Missing ${REQUIRED}"
+              exit 1
+            fi
+          done
+
+          cd build && zip -qr "../${PLUGIN_ID}.zip" "${PLUGIN_ID}"
+          cd ..
+          echo "sha256: $(sha256sum "${PLUGIN_ID}.zip" | cut -d' ' -f1)"
+          unzip -l "${PLUGIN_ID}.zip"
+
+      - name: Attach the zip to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.PLUGIN_ID }}.zip
+          generate_release_notes: true

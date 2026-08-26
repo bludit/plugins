@@ -1,0 +1,84 @@
+# Weekly check that every asset in the index still exists and still matches the
+# checksum that was recorded when it was reviewed.
+#
+# The plugins are hosted by their authors, so a release can be deleted or an
+# asset replaced long after the review. A checksum that stopped matching means
+# the bytes changed under a version number that did not, which is exactly what
+# the checksum is there to catch. It is reported, never repaired automatically.
+
+name: Health check
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  healthcheck:
+    name: Verify the assets in the index
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check every asset
+        id: check
+        run: |
+          python3 scripts/healthcheck.py --index index.json --output healthcheck.md
+          if [ -s healthcheck.md ]; then
+            echo "problems=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "problems=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open or update the tracking issue
+        if: steps.check.outputs.problems == '1'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('healthcheck.md', 'utf8');
+            const title = 'Plugin directory health check';
+            const { owner, repo } = context.repo;
+
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', labels: 'healthcheck', per_page: 100
+            });
+
+            if (existing.length) {
+              await github.rest.issues.update({
+                owner, repo, issue_number: existing[0].number, body
+              });
+            } else {
+              await github.rest.issues.create({
+                owner, repo, title, body, labels: ['healthcheck']
+              });
+            }
+
+      - name: Close the tracking issue when everything is fine
+        if: steps.check.outputs.problems == '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', labels: 'healthcheck', per_page: 100
+            });
+            for (const issue of existing) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: issue.number,
+                body: 'Every asset in the index resolves and matches its checksum. Closing.'
+              });
+              await github.rest.issues.update({
+                owner, repo, issue_number: issue.number, state: 'closed'
+              });
+            }

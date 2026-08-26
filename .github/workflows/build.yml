@@ -1,0 +1,52 @@
+# Rebuild index.json when a submission is merged into main.
+#
+# index.json is the file Bludit downloads. It is generated, never edited by
+# hand: every asset is fetched and its sha256 recorded, so the checksum in the
+# index always describes the bytes that were actually reviewed.
+
+name: Build index
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'plugins/**'
+      - 'scripts/build_index.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-index
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Rebuild index.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Rebuild the index
+        run: python3 scripts/build_index.py --output index.json
+
+      - name: Commit the index when it changed
+        run: |
+          if git diff --quiet -- index.json; then
+            echo "index.json is already up to date."
+            exit 0
+          fi
+
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add index.json
+          git commit -m 'chore: rebuild index.json [skip ci]'
+          git push
