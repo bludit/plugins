@@ -86,10 +86,9 @@ itself.
 
 Open a pull request that changes `version`, `releaseDate` and `download`.
 
-This is on purpose. The `sha256` in the index is what guarantees that the bytes
-being installed are the bytes that were reviewed, so a new version has to be
-reviewed too. It is a real change from pointing at `master.zip` and forgetting,
-and it is the reason a plugin from this directory can be trusted.
+This is on purpose. The `sha256` in the index guarantees that the bytes being
+installed are the bytes that were reviewed, so a new version has to be reviewed
+too. It is the reason a plugin installed from this directory can be trusted.
 
 ## What the analyzer rejects
 

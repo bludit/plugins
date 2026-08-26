@@ -58,13 +58,8 @@ submission means running code supplied by whoever opened the pull request, so
 that job gets a read-only token and no secrets. Only the second workflow, which
 never touches that code, is allowed to write.
 
-## Relationship with the old repository
+## Bundled plugins
 
-[`bludit/plugins-repository`](https://github.com/bludit/plugins-repository) is
-the database behind plugins.bludit.com and keeps serving Bludit v2 and v3. It
-was built for a website rather than for an installer: no aggregated index, no
-compatibility field, no checksums, and no fixed shape for the zip. This
-repository replaces it for v4 and is not a fork of it.
-
-Plugins bundled with Bludit are not listed here. They ship inside `bl-plugins/`
-so a fresh install works without a network connection.
+Plugins that ship with Bludit live in `bl-plugins/` so a fresh install works
+without a network connection. They are not listed here, and an id or a class
+name already used by one of them is rejected, see [`rules/`](rules).
