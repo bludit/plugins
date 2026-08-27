@@ -40,13 +40,16 @@ jobs:
 
       - name: Commit the index when it changed
         run: |
-          if git diff --quiet -- index.json; then
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+
+          # Staged first, git diff on its own ignores an untracked file and the
+          # very first index would never be committed
+          git add index.json
+          if git diff --cached --quiet -- index.json; then
             echo "index.json is already up to date."
             exit 0
           fi
 
-          git config user.name  'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add index.json
           git commit -m 'chore: rebuild index.json [skip ci]'
           git push

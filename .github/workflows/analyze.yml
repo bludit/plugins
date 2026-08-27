@@ -45,9 +45,13 @@ jobs:
       - name: Find the submissions changed by this pull request
         id: changed
         run: |
-          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          # The base commit of the pull request, diffed against the merge ref
+          # that actions/checkout leaves in place. Fetching the base branch
+          # with --depth=1 instead would shallow the history and the diff
+          # would silently come back empty once main moved on.
+          BASE='${{ github.event.pull_request.base.sha }}'
           CHANGED=$(git diff --name-only --diff-filter=d \
-            "origin/${{ github.base_ref }}...HEAD" -- 'plugins/*.json' | tr '\n' ' ')
+            "${BASE}" HEAD -- 'plugins/*.json' | tr '\n' ' ')
           echo "files=${CHANGED}" >> "$GITHUB_OUTPUT"
           if [ -z "${CHANGED}" ]; then
             echo "No submission changed by this pull request."
