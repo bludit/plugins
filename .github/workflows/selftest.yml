@@ -1,0 +1,45 @@
+# Check the analyzer against its own corpus.
+#
+# The source rules in scripts/analyze.py are the gate every submission passes
+# through. A rule that quietly stops matching would not fail anything, every
+# pull request would simply start passing, so the corpus in tests/ pins what
+# each rule has to report and this runs it on every change to the scripts.
+
+name: Self test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/**'
+      - 'tests/**'
+      - 'rules/**'
+      - '.github/workflows/selftest.yml'
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'tests/**'
+      - 'rules/**'
+      - '.github/workflows/selftest.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    name: Analyzer corpus
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Show the PHP version used to tokenize the corpus
+        run: php --version
+
+      - name: Run the corpus
+        run: python3 scripts/selftest.py

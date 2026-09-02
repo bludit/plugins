@@ -62,12 +62,15 @@ are the bytes that were reviewed, so a new version is reviewed too.
 entries with `..` or symbolic links, a missing `plugin.php`, `metadata.json` or
 `languages/en.json`, a version that disagrees with `metadata.json`, PHP that does
 not parse, no class extending `Plugin`, an id or class name already used by
-Bludit, and `eval`, shell commands or hidden encoded code.
+Bludit, and `eval`, shell commands or hidden encoded code. Also blocked:
+`include` or `unserialize` reaching `$_GET`, `$_POST`, `$_REQUEST` or `$_COOKIE`,
+and calling a function whose name was assembled at runtime.
 
 **Flagged for a person to read, not blocked:** outbound HTTP requests, writing
-files, dynamic calls, printing `$_GET` without `Sanitize::html()`. These are
-legitimate for plenty of plugins — mention in the pull request why you need
-them and it will go faster.
+files, calling a closure held in a variable, including a path built from
+constants, `unserialize` on your own data, printing `$_GET` without
+`Sanitize::html()`. These are legitimate for plenty of plugins — mention in the
+pull request why you need them and it will go faster.
 
 The checks read the parsed PHP, so the word `system` in a comment or a string
 is not a problem.

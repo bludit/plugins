@@ -70,6 +70,10 @@ DECODERS = {"base64_decode", "gzinflate", "gzuncompress", "str_rot13", "gzdecode
 
 SUPERGLOBALS = {"$_GET", "$_POST", "$_REQUEST", "$_COOKIE"}
 
+# include and require are language constructs, not functions, so they never
+# reach the T_STRING branch and need their own token names
+INCLUDE_TOKENS = ("T_INCLUDE", "T_INCLUDE_ONCE", "T_REQUIRE", "T_REQUIRE_ONCE")
+
 
 class Report:
     def __init__(self, plugin_id):
@@ -530,6 +534,8 @@ def scan_tokens(tokens, relative, reserved, report):
     items = significant(tokens)
     found_plugin_class = False
     decoders_seen = set()
+    assembled = _assembled_variables(items)
+    inside_backticks = False
 
     for index, token in enumerate(items):
         name, text, line = token["name"], token["text"], token["line"]
@@ -544,11 +550,58 @@ def scan_tokens(tokens, relative, reserved, report):
                          file=relative, line=line)
             continue
 
+        # A backtick expression is delimited by two identical tokens, so the
+        # closing one has to be swallowed or every shell call is reported twice
         if name == "T_SHELL_EXEC" or (name == "CHAR" and text == "`"):
-            report.error("SRC_SHELL",
-                         "`%s` runs a shell command with backticks on line %d." % (relative, line),
-                         "There is no legitimate use for this in a plugin listed in the directory.",
-                         file=relative, line=line)
+            inside_backticks = not inside_backticks
+            if inside_backticks:
+                report.error("SRC_SHELL",
+                             "`%s` runs a shell command with backticks on line %d." % (relative, line),
+                             "There is no legitimate use for this in a plugin listed in the directory.",
+                             file=relative, line=line)
+            continue
+
+        # include and require reach a file path that Bludit will execute. A
+        # request controlled path is a remote code execution, anything else
+        # computed is worth a human reading it.
+        if name in INCLUDE_TOKENS:
+            window = _statement_window(items, index)
+            variables = [t for t in window if t["name"] == "T_VARIABLE"]
+            tainted = [t for t in variables if t["text"] in SUPERGLOBALS]
+            if tainted:
+                report.error("SRC_DYNAMIC_INCLUDE",
+                             "`%s` includes a path taken from `%s` on line %d."
+                             % (relative, tainted[0]["text"], line),
+                             "Request data must never reach include or require, that is a remote "
+                             "code execution. Include a fixed path instead.",
+                             file=relative, line=line)
+            elif variables:
+                report.warning("SRC_DYNAMIC_INCLUDE",
+                               "`%s` includes a computed path on line %d." % (relative, line),
+                               "Fine when the path is built from constants such as `PATH_PLUGINS`. "
+                               "Please say in the pull request what it loads.",
+                               file=relative, line=line)
+            continue
+
+        # Calling a variable bypasses every check that matches on a function
+        # name, so the name it was built from decides the severity
+        if name == "T_VARIABLE" and index + 1 < len(items) and items[index + 1]["text"] == "(":
+            previous = items[index - 1]["name"] if index else ""
+            if previous in ("T_OBJECT_OPERATOR", "T_DOUBLE_COLON", "T_FUNCTION",
+                            "T_NULLSAFE_OBJECT_OPERATOR"):
+                continue
+            if text in assembled:
+                report.error("SRC_DYNAMIC_CALL",
+                             "`%s` calls `%s()`, a function name assembled at runtime, on line %d."
+                             % (relative, text, line),
+                             "Building a function name from pieces hides which function is called "
+                             "and defeats every other check here. Call it by its name.",
+                             file=relative, line=line)
+            else:
+                report.warning("SRC_DYNAMIC_CALL",
+                               "`%s` calls the variable `%s()` on line %d." % (relative, text, line),
+                               "Fine for a closure. Please say in the pull request what it calls.",
+                               file=relative, line=line)
             continue
 
         # --- class declarations ---
@@ -582,6 +635,25 @@ def scan_tokens(tokens, relative, reserved, report):
 
         lowered = text.lower()
 
+        # unserialize on request data is object injection, on its own data it
+        # is ordinary
+        if lowered == "unserialize":
+            window = _statement_window(items, index)
+            tainted = [t for t in window
+                       if t["name"] == "T_VARIABLE" and t["text"] in SUPERGLOBALS]
+            if tainted:
+                report.error("SRC_UNSERIALIZE",
+                             "`%s` unserializes `%s` on line %d." % (relative, tainted[0]["text"], line),
+                             "Unserializing request data lets a visitor build any object in Bludit. "
+                             "Use `json_decode()` instead.",
+                             file=relative, line=line)
+            else:
+                report.warning("SRC_UNSERIALIZE",
+                               "`%s` calls `unserialize()` on line %d." % (relative, line),
+                               "Safe only when the data is yours. Prefer `json_decode()`.",
+                               file=relative, line=line)
+            continue
+
         if lowered in BANNED_CALLS:
             report.error(BANNED_CALLS[lowered],
                          "`%s` calls `%s()` on line %d." % (relative, text, line),
@@ -613,6 +685,51 @@ def scan_tokens(tokens, relative, reserved, report):
 
     _scan_echoed_input(items, relative, report)
     return found_plugin_class
+
+
+def _statement_window(items, index, limit=24):
+    """The tokens of the expression starting after index, up to the statement end."""
+    window = []
+    depth = 0
+    for offset in range(index + 1, min(index + limit, len(items))):
+        text = items[offset]["text"]
+        if text == "(":
+            depth += 1
+        elif text == ")":
+            depth -= 1
+            if depth < 0:
+                break
+        elif text == ";" and depth <= 0:
+            break
+        window.append(items[offset])
+    return window
+
+
+def _assembled_variables(items):
+    """Variables assigned from concatenated literals or from a decoder.
+
+    This is the shape that defeats every name based check in this file:
+
+        $f = 'ass' . 'ert';
+        $f($_POST['x']);
+
+    Nothing here ever calls a banned function by its name, so matching on the
+    call site alone would let it through. Knowing which variables were built
+    rather than written is what turns that back into an error.
+    """
+    assembled = set()
+    for index, token in enumerate(items):
+        if token["name"] != "T_VARIABLE":
+            continue
+        if index + 1 >= len(items) or items[index + 1]["text"] != "=":
+            continue
+        window = _statement_window(items, index + 1)
+        strings = [t for t in window if t["name"] == "T_CONSTANT_ENCAPSED_STRING"]
+        concatenated = any(t["text"] == "." for t in window) and len(strings) > 1
+        decoded = any(t["name"] == "T_STRING" and t["text"].lower() in DECODERS for t in window)
+        if concatenated or decoded:
+            assembled.add(token["text"])
+    return assembled
 
 
 def _reads_remote(items, index):

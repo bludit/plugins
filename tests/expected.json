@@ -1,0 +1,16 @@
+{
+  "_comment": "What scan_tokens must report for each file in corpus/. Every entry is severity/CODE, sorted. An empty list means the file must produce nothing at all, which is how the false positive cases are pinned.",
+
+  "01-dropper.php":     ["error/SRC_EVAL", "warning/SRC_DECODER"],
+  "02-varfunc.php":     ["error/SRC_DYNAMIC_CALL"],
+  "03-lfi.php":         ["error/SRC_DYNAMIC_INCLUDE"],
+  "04-xss.php":         ["warning/SRC_ECHO_INPUT"],
+  "05-arbwrite.php":    ["warning/SRC_FILESYSTEM_WRITE"],
+  "06-unserialize.php": ["error/SRC_UNSERIALIZE"],
+  "07-callback.php":    ["warning/SRC_DYNAMIC_CALL"],
+  "08-exfil.php":       ["warning/SRC_REMOTE_HTTP"],
+  "09-benign.php":      [],
+  "10-backtick.php":    ["error/SRC_SHELL"],
+  "11-legit.php":       ["warning/SRC_DYNAMIC_CALL", "warning/SRC_UNSERIALIZE"],
+  "12-hidden.php":      ["error/SRC_DYNAMIC_CALL", "warning/SRC_DECODER"]
+}
