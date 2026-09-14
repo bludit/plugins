@@ -182,9 +182,11 @@ def check_submission(path, report):
     priced = data.get("price_in_usd") is not None
     if priced and data.get("download"):
         report.error("PRICE_DOWNLOAD",
-                     "The submission has a price and a `download`.",
-                     "A priced plugin is listed, not installed. Remove `download`, or remove "
-                     "`price_in_usd` and publish the asset for free.", file=path)
+                     "A paid plugin cannot have a download link.",
+                     "`price_in_usd` and `download` are exclusive. Bludit cannot pay for an "
+                     "asset, so a paid plugin is listed and sold from your own website, never "
+                     "installed from the admin panel. Remove `download` to sell it, or remove "
+                     "`price_in_usd` to publish it for free.", file=path)
     elif not priced and not data.get("download"):
         report.error("DOWNLOAD_MISSING",
                      "The submission has no `download`.",
