@@ -1,0 +1,9 @@
+{
+  "author": "Example",
+  "email": "",
+  "website": "https://example.com/hello-world",
+  "version": "1.0.0",
+  "license": "MIT",
+  "compatible": "4.0",
+  "notes": ""
+}

@@ -27,6 +27,17 @@ MAX_ZIP_BYTES = 10 * 1024 * 1024          # keep in sync with PLUGINS_MAX_ZIP_SI
 MAX_UNCOMPRESSED_BYTES = 40 * 1024 * 1024  # keep in sync with PLUGINS_MAX_UNCOMPRESSED_SIZE
 MAX_ASSET_BYTES = 200 * 1024              # single vendored asset, advisory only
 
+# Fields that exist both in the submission and inside the zip. The submission
+# is the record that gets reviewed and merged, the zip is what a site actually
+# installs, so the two disagreeing means the directory advertises something
+# the plugin does not ship. Every bundled plugin carries all six, so requiring
+# them costs a real author nothing.
+METADATA_FIELDS = ("author", "website", "license", "compatible", "version", "releaseDate")
+
+# The name and the description live in the language file, not in metadata.json,
+# because Bludit reads them from there to build the plugins page
+LANGUAGE_FIELDS = ("name", "description")
+
 ALLOWED_HOSTS = {
     "github.com",
     "objects.githubusercontent.com",
@@ -379,21 +390,26 @@ def check_structure(root, submission, report):
         report.error("META_INVALID", "`metadata.json` is not valid JSON: %s" % exc, file="metadata.json")
         return
 
-    for field in ("version", "compatible"):
+    for field in METADATA_FIELDS:
         if not metadata.get(field):
-            report.error("META_INCOMPLETE", "`metadata.json` has no `%s`." % field, file="metadata.json")
+            report.error("META_INCOMPLETE", "`metadata.json` has no `%s`." % field,
+                         "Bludit shows it on the plugins page, and the directory has to match it.",
+                         file="metadata.json")
+            continue
+        if metadata[field] != submission.get(field):
+            report.error("META_MISMATCH",
+                         "`%s` does not match: the submission says `%s`, `metadata.json` says `%s`."
+                         % (field, submission.get(field), metadata[field]),
+                         "The two must be identical. Fix whichever one is wrong, the directory must "
+                         "not advertise something the plugin does not ship.",
+                         file="metadata.json")
 
-    if metadata.get("version") and metadata["version"] != submission.get("version"):
-        report.error("META_VERSION_MISMATCH",
-                     "The submission says `%s`, `metadata.json` says `%s`."
-                     % (submission.get("version"), metadata["version"]),
-                     "The two must be identical, otherwise the directory advertises a version it does not ship.",
-                     file="metadata.json")
-
-    if metadata.get("compatible") and metadata["compatible"] != submission.get("compatible"):
-        report.error("META_COMPATIBLE_MISMATCH",
-                     "The submission says `%s`, `metadata.json` says `%s`."
-                     % (submission.get("compatible"), metadata["compatible"]),
+    # An absent type means a regular plugin, which the submission writes as ""
+    if metadata.get("type", "") != submission.get("type", ""):
+        report.error("META_MISMATCH",
+                     "`type` does not match: the submission says `%s`, `metadata.json` says `%s`."
+                     % (submission.get("type", ""), metadata.get("type", "")),
+                     "Leave both empty for a regular plugin, or set the same value in both.",
                      file="metadata.json")
 
     language_path = os.path.join(root, "languages", "en.json")
@@ -415,11 +431,19 @@ def check_structure(root, submission, report):
                              "`languages/en.json` needs `plugin-data.name` and `plugin-data.description`.",
                              'For example: {"plugin-data":{"name":"Hello","description":"Says hello."}}',
                              file="languages/en.json")
+            else:
+                for field in LANGUAGE_FIELDS:
+                    if data[field] != submission.get(field):
+                        report.error("LANG_MISMATCH",
+                                     "`%s` does not match: the submission says `%s`, "
+                                     "`languages/en.json` says `%s`."
+                                     % (field, submission.get(field), data[field]),
+                                     "Bludit reads this file to build the plugins page, so a visitor "
+                                     "would read one text in the directory and another once installed.",
+                                     file="languages/en.json")
 
     # The directory inside the zip should carry the plugin id
     if root != os.path.dirname(root) and os.path.basename(root) not in ("", plugin_id):
-        if os.path.basename(root) != os.path.basename(os.path.normpath(root)):
-            pass
         report.info("ZIP_DIRNAME",
                     "The directory inside the zip is `%s`, the id is `%s`."
                     % (os.path.basename(root), plugin_id),

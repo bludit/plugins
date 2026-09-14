@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/bludit/plugins/main/rules/plugin.schema.json",
   "title": "Bludit plugin submission",
-  "description": "One file per plugin inside plugins/. The filename must be <id>.json. Fields derived by CI (sha256, size) must not be present.",
+  "description": "One file per plugin inside plugins/. The filename must be <id>.json. Every field that also exists inside the zip is compared against it by the workflow. Fields derived by CI (sha256, size) must not be present.",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "name", "description", "author", "website", "license", "compatible", "version", "releaseDate", "download"],
@@ -10,7 +10,7 @@
     "id": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9-]{1,48}$",
-      "description": "Directory name created inside bl-plugins. Must match the filename and the directory inside the zip."
+      "description": "Directory name created inside bl-plugins. Must match the filename of the submission."
     },
     "name": {
       "type": "string",
@@ -20,9 +20,9 @@
     "description": {
       "type": "string",
       "minLength": 10,
-      "maxLength": 200,
+      "maxLength": 300,
       "pattern": "^[^\\n\\r]+$",
-      "description": "One line, no line breaks."
+      "description": "One line, no line breaks. Must be identical to plugin-data.description in languages/en.json."
     },
     "author": {
       "type": "string",
@@ -39,7 +39,7 @@
       "type": "string",
       "minLength": 2,
       "maxLength": 40,
-      "description": "SPDX identifier, for example MIT or GPL-3.0-or-later. Use PROPRIETARY for a closed licence."
+      "description": "SPDX identifier, for example MIT or GPL-3.0-or-later. Use PROPRIETARY for a closed licence. Must be identical to the license in the metadata.json of the plugin."
     },
     "compatible": {
       "type": "string",
@@ -65,7 +65,7 @@
     "type": {
       "type": "string",
       "enum": ["", "editor", "theme"],
-      "description": "Leave empty for a regular plugin. Same vocabulary used by the metadata.json of the plugin."
+      "description": "Leave empty for a regular plugin. Must be identical to the type in the metadata.json of the plugin, which may omit it."
     },
     "tags": {
       "type": "array",

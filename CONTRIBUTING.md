@@ -27,7 +27,12 @@ Three things trip people up:
 - **`download` has to be a zip attached to a GitHub release.** Not
   `/archive/main.zip` — GitHub regenerates those, so the bytes change and the
   checksum recorded for your plugin would stop matching.
-- **`version` has to be the same** as the one in your `metadata.json`.
+- **Every field that also exists in your plugin has to be identical to it.**
+  `author`, `website`, `license`, `compatible`, `version`, `releaseDate` and
+  `type` are compared against your `metadata.json`, and `name` and
+  `description` against `plugin-data` in your `languages/en.json`. The
+  directory must not advertise anything your plugin does not ship, so a
+  difference blocks the merge. Copy them across rather than rewriting them.
 
 A bot checks the pull request and comments with anything that needs fixing,
 pointing at the file and the line. Push a fix and the comment updates itself.
@@ -51,7 +56,8 @@ and the zip is built and attached to the release.
 
 ## Releasing a new version
 
-Open a pull request changing `version`, `releaseDate` and `download`.
+Open a pull request changing `version`, `releaseDate` and `download`, keeping
+them the same as your `metadata.json`.
 
 The checksum recorded for a plugin is what guarantees the bytes people install
 are the bytes that were reviewed, so a new version is reviewed too.
@@ -60,8 +66,8 @@ are the bytes that were reviewed, so a new version is reviewed too.
 
 **Blocks the merge:** a zip that cannot be downloaded or is not a valid plugin,
 entries with `..` or symbolic links, a missing `plugin.php`, `metadata.json` or
-`languages/en.json`, a version that disagrees with `metadata.json`, PHP that does
-not parse, no class extending `Plugin`, an id or class name already used by
+`languages/en.json`, any field that disagrees with `metadata.json` or
+`languages/en.json`, PHP that does not parse, no class extending `Plugin`, an id or class name already used by
 Bludit, and `eval`, shell commands or hidden encoded code. Also blocked:
 `include` or `unserialize` reaching `$_GET`, `$_POST`, `$_REQUEST` or `$_COOKIE`,
 and calling a function whose name was assembled at runtime.
