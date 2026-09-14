@@ -1,13 +1,14 @@
 {
-  "id": "hello-world",
   "name": "Hello World",
-  "description": "Adds a friendly greeting to every page of the site.",
+  "description": {
+    "en": "Adds a friendly greeting to every page of the site.",
+    "es": "Agrega un saludo a cada pagina del sitio."
+  },
   "author": "Example",
   "website": "https://example.com/hello-world",
   "license": "MIT",
   "compatible": "4.0",
   "version": "1.0.0",
-  "releaseDate": "2026-01-31",
   "download": "https://github.com/example/hello-world/releases/download/v1.0.0/hello-world.zip",
   "type": "",
   "tags": [

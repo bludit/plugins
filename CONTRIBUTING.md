@@ -5,34 +5,41 @@ fill it in, open a pull request. That is the whole thing.
 
 ```json
 {
-  "id": "hello-world",
   "name": "Hello World",
-  "description": "One line describing what the plugin does.",
+  "description": {
+    "en": "One line describing what the plugin does.",
+    "es": "Una linea describiendo lo que hace el plugin."
+  },
   "author": "Your Name",
   "website": "https://github.com/your-user/hello-world",
   "license": "MIT",
   "compatible": "4.0",
   "version": "1.0.0",
-  "releaseDate": "2026-01-31",
   "download": "https://github.com/your-user/hello-world/releases/download/v1.0.0/hello-world.zip",
   "type": "",
   "tags": ["example"]
 }
 ```
 
+`type` and `tags` are optional, everything above them is required. `id`,
+`sha256` and `size` are added by the workflow, do not write them yourself.
+
 Three things trip people up:
 
-- **The filename must match the `id`**, and the `id` is the directory Bludit
-  creates inside `bl-plugins`.
+- **The filename is the id.** `plugins/hello-world.json` becomes
+  `bl-plugins/hello-world`, so use lowercase letters, digits and hyphens.
 - **`download` has to be a zip attached to a GitHub release.** Not
   `/archive/main.zip` — GitHub regenerates those, so the bytes change and the
   checksum recorded for your plugin would stop matching.
-- **Every field that also exists in your plugin has to be identical to it.**
-  `author`, `website`, `license`, `compatible`, `version`, `releaseDate` and
-  `type` are compared against your `metadata.json`, and `name` and
-  `description` against `plugin-data` in your `languages/en.json`. The
-  directory must not advertise anything your plugin does not ship, so a
-  difference blocks the merge. Copy them across rather than rewriting them.
+- **`compatible` decides who is offered the plugin.** Bludit only lists a
+  plugin that names the `major.minor` the site is running, so `4.0` today.
+
+`description` takes one line per language, keyed by a Bludit language code.
+English is required and is what a site falls back to.
+
+Nothing is read out of your zip. This file is the listing, so it is worth
+getting right. The bot does compare the two and points out any difference for a
+maintainer to look at, but it never rewrites what you wrote.
 
 A bot checks the pull request and comments with anything that needs fixing,
 pointing at the file and the line. Push a fix and the comment updates itself.
@@ -56,18 +63,24 @@ and the zip is built and attached to the release.
 
 ## Releasing a new version
 
-Open a pull request changing `version`, `releaseDate` and `download`, keeping
-them the same as your `metadata.json`.
+Open a pull request changing `version` and `download`.
 
 The checksum recorded for a plugin is what guarantees the bytes people install
 are the bytes that were reviewed, so a new version is reviewed too.
+
+## Selling a plugin
+
+Set `price_in_usd` and leave `download` out. Bludit cannot install an asset it
+has to pay for, so a priced plugin is a listing only: it is hidden from the
+plugin directory in the admin panel, it carries no checksum, and **its source
+is never analyzed**. Sell and deliver it from your own website.
 
 ## What the bot rejects
 
 **Blocks the merge:** a zip that cannot be downloaded or is not a valid plugin,
 entries with `..` or symbolic links, a missing `plugin.php`, `metadata.json` or
-`languages/en.json`, any field that disagrees with `metadata.json` or
-`languages/en.json`, PHP that does not parse, no class extending `Plugin`, an id or class name already used by
+`languages/en.json`, a `metadata.json` without `version` or `compatible`
+(Bludit refuses to install it), PHP that does not parse, no class extending `Plugin`, an id or class name already used by
 Bludit, and `eval`, shell commands or hidden encoded code. Also blocked:
 `include` or `unserialize` reaching `$_GET`, `$_POST`, `$_REQUEST` or `$_COOKIE`,
 and calling a function whose name was assembled at runtime.

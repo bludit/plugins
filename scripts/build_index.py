@@ -25,10 +25,11 @@ ROOT = os.path.dirname(HERE)
 SCHEMA_VERSION = 1
 MAX_ZIP_BYTES = 10 * 1024 * 1024
 
-# The order of the keys in every entry of index.json
+# The order of the keys in every entry of index.json. id, sha256 and size are
+# added here, everything else is copied from the submission unchanged.
 FIELD_ORDER = [
     "id", "name", "description", "author", "website", "license",
-    "compatible", "version", "releaseDate", "download", "type", "tags",
+    "compatible", "version", "download", "price_in_usd", "type", "tags",
     "sha256", "size",
 ]
 
@@ -61,6 +62,18 @@ def build(fail_fast=False):
                 data = json.load(fh)
         except json.JSONDecodeError as exc:
             failures.append("%s: invalid JSON, %s" % (name, exc))
+            continue
+
+        # The filename is the id, the submission does not carry it
+        data["id"] = name[:-5]
+
+        # A priced plugin is a listing. There is no public asset to fetch, so it
+        # carries no checksum and Bludit hides it from the admin panel.
+        if data.get("price_in_usd") is not None:
+            entry = {key: data[key] for key in FIELD_ORDER if key in data}
+            entries.append(entry)
+            print("  %-30s %s  paid listing, no asset"
+                  % (entry["id"], entry.get("version", "?")), file=sys.stderr)
             continue
 
         try:

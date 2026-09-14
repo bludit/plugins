@@ -59,7 +59,9 @@ def payload_findings(case):
     if len(roots) != 1:
         raise SystemExit("%s must contain exactly one plugin directory" % case)
 
-    report = analyze.Report(submission.get("id", case))
+    # The id is the name of the submission file, which in a fixture is the name
+    # of the plugin directory sitting next to it
+    report = analyze.Report(roots[0])
     analyze.check_structure(os.path.join(directory, roots[0]), submission, report)
     return sorted("%s/%s" % (f["severity"], f["code"]) for f in report.findings)
 

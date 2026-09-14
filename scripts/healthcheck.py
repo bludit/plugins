@@ -63,6 +63,10 @@ def main():
 
     gone, mismatch = [], []
     for entry in index.get("plugins", []):
+        # A paid listing has no asset of ours to verify
+        if entry.get("price_in_usd") is not None:
+            print("  %-30s paid listing, skipped" % entry["id"], file=sys.stderr)
+            continue
         status, detail = check(entry)
         print("  %-30s %s %s" % (entry["id"], status, detail), file=sys.stderr)
         if status == "gone":

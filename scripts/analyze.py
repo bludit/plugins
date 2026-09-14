@@ -27,16 +27,15 @@ MAX_ZIP_BYTES = 10 * 1024 * 1024          # keep in sync with PLUGINS_MAX_ZIP_SI
 MAX_UNCOMPRESSED_BYTES = 40 * 1024 * 1024  # keep in sync with PLUGINS_MAX_UNCOMPRESSED_SIZE
 MAX_ASSET_BYTES = 200 * 1024              # single vendored asset, advisory only
 
-# Fields that exist both in the submission and inside the zip. The submission
-# is the record that gets reviewed and merged, the zip is what a site actually
-# installs, so the two disagreeing means the directory advertises something
-# the plugin does not ship. Every bundled plugin carries all six, so requiring
-# them costs a real author nothing.
-METADATA_FIELDS = ("author", "website", "license", "compatible", "version", "releaseDate")
+# Nothing in index.json is ever read from the zip. The submission is the record
+# a maintainer reviewed and merged, so a listing can never change because an
+# author replaced an asset. The zip is still compared against it and a
+# difference is reported for a person to judge, never used to overwrite a field.
+COMPARED_FIELDS = ("author", "website", "license", "compatible", "version")
 
-# The name and the description live in the language file, not in metadata.json,
-# because Bludit reads them from there to build the plugins page
-LANGUAGE_FIELDS = ("name", "description")
+# metadata.json without these two is refused by PluginInstaller, so a plugin
+# missing them cannot be installed at all
+METADATA_REQUIRED = ("version", "compatible")
 
 ALLOWED_HOSTS = {
     "github.com",
@@ -142,8 +141,12 @@ def load_reserved():
 
 
 def check_submission(path, report):
-    """Validate the JSON file itself. Returns the parsed submission or None."""
-    filename_id = os.path.basename(path)[:-5] if path.endswith(".json") else None
+    """Validate the JSON file itself. Returns the parsed submission or None.
+
+    The filename is the id. Carrying it inside the file as well would only
+    create a way for the two to disagree.
+    """
+    plugin_id = os.path.basename(path)[:-5] if path.endswith(".json") else None
 
     try:
         with open(path) as fh:
@@ -158,7 +161,7 @@ def check_submission(path, report):
         return None
 
     # Derived fields are computed by CI, a submission must not carry them
-    for field in ("sha256", "size", "checkedAt"):
+    for field in ("id", "sha256", "size", "checkedAt"):
         if field in data:
             report.error("FIELD_DERIVED",
                          "The field `%s` is calculated by the workflow and must not be in the submission." % field,
@@ -168,12 +171,25 @@ def check_submission(path, report):
     for msg, hint in schema_errors:
         report.error("SCHEMA", msg, hint, file=path)
 
-    plugin_id = data.get("id")
-
-    if plugin_id and filename_id and plugin_id != filename_id:
+    if plugin_id and not re.match(r"^[a-z0-9][a-z0-9-]{1,48}$", plugin_id):
         report.error("ID_FILENAME",
-                     "The id `%s` does not match the filename `%s.json`." % (plugin_id, filename_id),
-                     "Rename the file to `plugins/%s.json`, or change the id." % plugin_id, file=path)
+                     "`%s.json` is not a usable id." % plugin_id,
+                     "The filename becomes the directory inside bl-plugins, so it has to be "
+                     "lowercase letters, digits and hyphens.", file=path)
+
+    # A priced plugin is a listing. Bludit cannot install an asset it has to pay
+    # for, so there is nothing to pin a checksum to and nothing to analyze.
+    priced = data.get("price_in_usd") is not None
+    if priced and data.get("download"):
+        report.error("PRICE_DOWNLOAD",
+                     "The submission has a price and a `download`.",
+                     "A priced plugin is listed, not installed. Remove `download`, or remove "
+                     "`price_in_usd` and publish the asset for free.", file=path)
+    elif not priced and not data.get("download"):
+        report.error("DOWNLOAD_MISSING",
+                     "The submission has no `download`.",
+                     "A free plugin needs the zip attached to a GitHub release. Set "
+                     "`price_in_usd` instead if the plugin is sold from your website.", file=path)
 
     reserved = load_reserved()
     if plugin_id in reserved["bundledPluginIds"]:
@@ -229,6 +245,18 @@ def _validate_manual(data, schema):
         if spec is None:
             errors.append(("`%s` is not a known field." % field, ""))
             continue
+        if spec.get("type") == "number":
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                errors.append(("`%s` must be a number." % field, _hint_for(field, schema)))
+            elif "exclusiveMinimum" in spec and value <= spec["exclusiveMinimum"]:
+                errors.append(("`%s` must be greater than %s."
+                               % (field, spec["exclusiveMinimum"]), ""))
+            elif "maximum" in spec and value > spec["maximum"]:
+                errors.append(("`%s` must not be greater than %s." % (field, spec["maximum"]), ""))
+            continue
+        if spec.get("type") == "object":
+            errors.extend(_validate_object(field, value, spec))
+            continue
         if spec.get("type") == "string":
             if not isinstance(value, str):
                 errors.append(("`%s` must be a string." % field, ""))
@@ -243,6 +271,37 @@ def _validate_manual(data, schema):
             if "enum" in spec and value not in spec["enum"]:
                 errors.append(("`%s` must be one of: %s." % (field, ", ".join(repr(e) for e in spec["enum"])), ""))
     return not errors, errors
+
+
+def _validate_object(field, value, spec):
+    """The keyed objects in the schema, today only description."""
+    if not isinstance(value, dict):
+        return [("`%s` must be an object." % field, spec.get("description", ""))]
+
+    errors = []
+    for key in spec.get("required", []):
+        if key not in value:
+            errors.append(("`%s` has no `%s`." % (field, key), spec.get("description", "")))
+
+    patterns = spec.get("patternProperties", {})
+    for key, text in value.items():
+        rule = next((r for p, r in patterns.items() if re.match(p, key)), None)
+        if rule is None:
+            errors.append(("`%s.%s` is not a known key." % (field, key),
+                           spec.get("description", "")))
+            continue
+        if not isinstance(text, str):
+            errors.append(("`%s.%s` must be a string." % (field, key), ""))
+            continue
+        if "maxLength" in rule and len(text) > rule["maxLength"]:
+            errors.append(("`%s.%s` is longer than %d characters."
+                           % (field, key, rule["maxLength"]), ""))
+        if "minLength" in rule and len(text) < rule["minLength"]:
+            errors.append(("`%s.%s` is shorter than %d characters."
+                           % (field, key, rule["minLength"]), ""))
+        if rule.get("pattern") and not re.search(rule["pattern"], text):
+            errors.append(("`%s.%s` does not have the expected format." % (field, key), ""))
+    return errors
 
 
 def _hint_for(field, schema):
@@ -367,7 +426,7 @@ def find_root(extract_to, report):
 # ---------------------------------------------------------------------------
 
 def check_structure(root, submission, report):
-    plugin_id = submission.get("id", "")
+    plugin_id = report.plugin_id
 
     junk = {".git", "node_modules", ".DS_Store", "__MACOSX", ".idea", ".vscode"}
     for current, directories, files in os.walk(root):
@@ -390,27 +449,30 @@ def check_structure(root, submission, report):
         report.error("META_INVALID", "`metadata.json` is not valid JSON: %s" % exc, file="metadata.json")
         return
 
-    for field in METADATA_FIELDS:
+    for field in METADATA_REQUIRED:
         if not metadata.get(field):
             report.error("META_INCOMPLETE", "`metadata.json` has no `%s`." % field,
-                         "Bludit shows it on the plugins page, and the directory has to match it.",
-                         file="metadata.json")
+                         "Bludit refuses to install a plugin without it.", file="metadata.json")
+
+    # The submission is what gets listed either way. A difference is reported so
+    # a maintainer can see it, it never changes what goes into index.json.
+    for field in COMPARED_FIELDS:
+        if not metadata.get(field):
             continue
         if metadata[field] != submission.get(field):
-            report.error("META_MISMATCH",
-                         "`%s` does not match: the submission says `%s`, `metadata.json` says `%s`."
-                         % (field, submission.get(field), metadata[field]),
-                         "The two must be identical. Fix whichever one is wrong, the directory must "
-                         "not advertise something the plugin does not ship.",
-                         file="metadata.json")
+            report.warning("META_MISMATCH",
+                           "`%s` differs: the submission says `%s`, `metadata.json` says `%s`."
+                           % (field, submission.get(field), metadata[field]),
+                           "The submission is what the directory lists. Say in the pull request "
+                           "which one is right.", file="metadata.json")
 
     # An absent type means a regular plugin, which the submission writes as ""
     if metadata.get("type", "") != submission.get("type", ""):
-        report.error("META_MISMATCH",
-                     "`type` does not match: the submission says `%s`, `metadata.json` says `%s`."
-                     % (submission.get("type", ""), metadata.get("type", "")),
-                     "Leave both empty for a regular plugin, or set the same value in both.",
-                     file="metadata.json")
+        report.warning("META_MISMATCH",
+                       "`type` differs: the submission says `%s`, `metadata.json` says `%s`."
+                       % (submission.get("type", ""), metadata.get("type", "")),
+                       "Leave both empty for a regular plugin, or set the same value in both.",
+                       file="metadata.json")
 
     language_path = os.path.join(root, "languages", "en.json")
     if not os.path.isfile(language_path):
@@ -432,15 +494,18 @@ def check_structure(root, submission, report):
                              'For example: {"plugin-data":{"name":"Hello","description":"Says hello."}}',
                              file="languages/en.json")
             else:
-                for field in LANGUAGE_FIELDS:
-                    if data[field] != submission.get(field):
-                        report.error("LANG_MISMATCH",
-                                     "`%s` does not match: the submission says `%s`, "
-                                     "`languages/en.json` says `%s`."
-                                     % (field, submission.get(field), data[field]),
-                                     "Bludit reads this file to build the plugins page, so a visitor "
-                                     "would read one text in the directory and another once installed.",
-                                     file="languages/en.json")
+                english = submission.get("description")
+                english = english.get("en") if isinstance(english, dict) else None
+                for field, listed in (("name", submission.get("name")),
+                                      ("description", english)):
+                    if data[field] != listed:
+                        report.warning("LANG_MISMATCH",
+                                       "`%s` differs: the submission says `%s`, "
+                                       "`languages/en.json` says `%s`."
+                                       % (field, listed, data[field]),
+                                       "The directory lists the submission, Bludit shows this file "
+                                       "once the plugin is installed. A visitor would read two "
+                                       "different texts.", file="languages/en.json")
 
     # The directory inside the zip should carry the plugin id
     if root != os.path.dirname(root) and os.path.basename(root) not in ("", plugin_id):
@@ -458,7 +523,8 @@ def check_structure(root, submission, report):
                             "`%s` is %d KB." % (relative, os.path.getsize(path) // 1024),
                             "Large vendored assets make every install slower.", file=relative)
 
-    if not any(f["code"].startswith(("META_", "LANG_")) for f in report.findings):
+    if not any(f["code"].startswith(("META_", "LANG_")) and f["severity"] == "error"
+               for f in report.findings):
         report.ok("structure")
 
 
@@ -802,7 +868,16 @@ def main():
 
     submission = check_submission(args.submission, report)
 
-    if submission and not args.skip_download and not report.errors:
+    priced = bool(submission) and submission.get("price_in_usd") is not None
+    if priced and not report.errors:
+        report.info("PRICE_LISTING",
+                    "This is a paid listing, there is no asset to check.",
+                    "Bludit hides it from the plugin directory in the admin panel because it "
+                    "cannot install it. Nothing below was reviewed: no archive, no PHP, no "
+                    "checksum. Read the plugin yourself before merging.",
+                    file=os.path.basename(args.submission))
+
+    if submission and not priced and not args.skip_download and not report.errors:
         import tempfile
         with tempfile.TemporaryDirectory() as workdir:
             if args.local_zip:

@@ -2,7 +2,7 @@
   "name": "Hello World",
   "description": {
     "en": "Adds a friendly greeting to every page of the site.",
-    "es": "Agrega un saludo a cada pagina del sitio."
+    "ru": "Privet, mir, na kazhdoy stranitse."
   },
   "author": "Example",
   "website": "https://example.com/hello-world",

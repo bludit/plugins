@@ -1,41 +1,43 @@
 {
-  "_comment": "What check_structure must report for each case in payload/. The submission is the record a maintainer reviews, the directory next to it is the extracted zip. Every entry is severity/CODE, sorted. An empty list means the case must produce nothing, which is how the false positives are pinned.",
+  "_comment": "What check_structure must report for each case in payload/. The submission is the record a maintainer reviews, the directory next to it is the extracted zip. Nothing is ever read out of the zip, a difference is reported for a person to judge. Every entry is severity/CODE, sorted. An empty list means the case must produce nothing, which is how the false positives are pinned.",
   "01-match": [],
   "02-version": [
-    "error/META_MISMATCH"
+    "warning/META_MISMATCH"
   ],
   "03-compatible": [
-    "error/META_MISMATCH"
+    "warning/META_MISMATCH"
   ],
   "04-license": [
-    "error/META_MISMATCH"
+    "warning/META_MISMATCH"
   ],
   "05-author": [
-    "error/META_MISMATCH"
+    "warning/META_MISMATCH"
   ],
   "06-website": [
-    "error/META_MISMATCH"
+    "warning/META_MISMATCH"
   ],
-  "07-releasedate": [
-    "error/META_MISMATCH"
+  "07-name": [
+    "warning/LANG_MISMATCH"
   ],
-  "08-name": [
-    "error/LANG_MISMATCH"
+  "08-description": [
+    "warning/LANG_MISMATCH"
   ],
-  "09-description": [
-    "error/LANG_MISMATCH"
-  ],
+  "09-other-language-ok": [],
   "10-type-absent-ok": [],
   "11-type-mismatch": [
-    "error/META_MISMATCH"
+    "warning/META_MISMATCH"
   ],
   "12-type-declared-ok": [],
-  "13-incomplete": [
+  "13-no-version": [
     "error/META_INCOMPLETE"
   ],
-  "14-rewritten": [
-    "error/LANG_MISMATCH",
-    "error/META_MISMATCH",
-    "error/META_MISMATCH"
+  "14-no-compatible": [
+    "error/META_INCOMPLETE"
+  ],
+  "15-metadata-sparse": [],
+  "16-rewritten": [
+    "warning/LANG_MISMATCH",
+    "warning/META_MISMATCH",
+    "warning/META_MISMATCH"
   ]
 }
