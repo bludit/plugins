@@ -199,13 +199,8 @@ def check_submission(path, report):
                      "`%s` is a plugin bundled with Bludit." % plugin_id,
                      "Bundled plugins are not listed in the directory. Choose another id.", file=path)
 
-    # Another submission already using this id
-    for other in sorted(os.listdir(os.path.join(ROOT, "plugins"))):
-        if not other.endswith(".json") or other == os.path.basename(path):
-            continue
-        if other[:-5] == plugin_id:
-            report.error("ID_DUPLICATE",
-                         "The id `%s` is already used by `plugins/%s`." % (plugin_id, other), file=path)
+    # Two submissions cannot share an id any more, the id is the filename and
+    # the filesystem keeps those unique, so there is nothing left to check here
 
     if ok and not report.errors:
         report.ok("submission")
@@ -259,6 +254,9 @@ def _validate_manual(data, schema):
         if spec.get("type") == "object":
             errors.extend(_validate_object(field, value, spec))
             continue
+        if spec.get("type") == "array":
+            errors.extend(_validate_array(field, value, spec))
+            continue
         if spec.get("type") == "string":
             if not isinstance(value, str):
                 errors.append(("`%s` must be a string." % field, ""))
@@ -273,6 +271,26 @@ def _validate_manual(data, schema):
             if "enum" in spec and value not in spec["enum"]:
                 errors.append(("`%s` must be one of: %s." % (field, ", ".join(repr(e) for e in spec["enum"])), ""))
     return not errors, errors
+
+
+def _validate_array(field, value, spec):
+    """The arrays in the schema, today only tags."""
+    if not isinstance(value, list):
+        return [("`%s` must be a list." % field, spec.get("description", ""))]
+
+    errors = []
+    if "maxItems" in spec and len(value) > spec["maxItems"]:
+        errors.append(("`%s` has more than %d entries." % (field, spec["maxItems"]), ""))
+
+    rule = spec.get("items", {})
+    for index, item in enumerate(value):
+        if rule.get("type") == "string" and not isinstance(item, str):
+            errors.append(("`%s[%d]` must be a string." % (field, index), ""))
+            continue
+        if rule.get("pattern") and not re.search(rule["pattern"], item):
+            errors.append(("`%s[%d]` does not have the expected format." % (field, index),
+                           spec.get("description", "")))
+    return errors
 
 
 def _validate_object(field, value, spec):

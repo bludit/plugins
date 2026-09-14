@@ -8,6 +8,8 @@ Two suites, both driven by a file that records exactly what has to be reported:
   tests/payload       a submission next to the zip it claims to describe, so
                       the cross-check keeps refusing a submission that does not
                       match what the author actually uploaded
+  tests/submission    one case per field of the submission itself, run with
+                      jsonschema and with the fallback so the two agree
 
 A rule that stops firing, or starts firing on real code, fails here instead of
 on somebody's pull request.
@@ -17,10 +19,12 @@ on somebody's pull request.
 Exit status is 0 when everything matches, 1 otherwise.
 """
 
+import copy
 import json
 import os
 import shutil
 import sys
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -32,6 +36,7 @@ CORPUS = os.path.join(ROOT, "tests", "corpus")
 EXPECTED = os.path.join(ROOT, "tests", "expected.json")
 PAYLOAD = os.path.join(ROOT, "tests", "payload")
 PAYLOAD_EXPECTED = os.path.join(ROOT, "tests", "payload-expected.json")
+SUBMISSION_EXPECTED = os.path.join(ROOT, "tests", "submission-expected.json")
 
 # The guard is advisory and the corpus files do not carry it, it would only add
 # the same noise to all of them
@@ -101,6 +106,58 @@ def run_payload():
     return failures, len(expected)
 
 
+def submission_case(spec, base):
+    """Build one submission from the base and return the errors it produces."""
+    data = copy.deepcopy(base)
+    for field in spec.get("remove", []):
+        data.pop(field, None)
+    data.update(spec.get("set", {}))
+
+    directory = os.path.join(ROOT, "plugins")
+    name = spec.get("filename", "hello-world.json")
+    path = os.path.join(directory, name)
+    try:
+        with open(path, "w") as fh:
+            json.dump(data, fh)
+        report = analyze.Report(name[:-5])
+        analyze.check_submission(path, report)
+        return sorted({f["code"] for f in report.errors})
+    finally:
+        if os.path.exists(path):
+            os.remove(path)
+
+
+def run_submission():
+    spec = json.load(open(SUBMISSION_EXPECTED))
+    base = spec["_base"]
+    cases = spec["cases"]
+
+    failures = []
+    for name in sorted(cases):
+        want = sorted(set(cases[name]["expect"]))
+
+        got = submission_case(cases[name], base)
+
+        # The same case again with jsonschema unavailable. An entry of None in
+        # sys.modules makes the import raise, which is the fallback path.
+        with mock.patch.dict(sys.modules, {"jsonschema": None}):
+            got_fallback = submission_case(cases[name], base)
+
+        if got != want:
+            print("  FAIL %-26s expected: %s" % (name, ", ".join(want) or "accepted"))
+            print("       %-26s got:      %s" % ("", ", ".join(got) or "accepted"))
+            failures.append(name)
+        elif got_fallback != want:
+            print("  FAIL %-26s jsonschema and the fallback disagree" % name)
+            print("       %-26s jsonschema: %s" % ("", ", ".join(got) or "accepted"))
+            print("       %-26s fallback:   %s" % ("", ", ".join(got_fallback) or "accepted"))
+            failures.append(name)
+        else:
+            print("  ok   %-26s %s" % (name, ", ".join(got) or "accepted"))
+
+    return failures, len(cases)
+
+
 def main():
     php = shutil.which("php")
     if php is None:
@@ -134,15 +191,21 @@ def main():
             failures.append(name)
 
     print("")
+    print("The submission file")
+    submission_failures, submission_total = run_submission()
+
+    print("")
     print("Submission against the uploaded zip")
     payload_failures, payload_total = run_payload()
 
     print("")
-    if failures or payload_failures:
-        print("%d source and %d payload case(s) failed."
-              % (len(failures), len(payload_failures)), file=sys.stderr)
+    if failures or payload_failures or submission_failures:
+        print("%d source, %d submission and %d payload case(s) failed."
+              % (len(failures), len(submission_failures), len(payload_failures)),
+              file=sys.stderr)
         return 1
-    print("All %d corpus files and %d payload cases match." % (len(expected), payload_total))
+    print("All %d corpus files, %d submission cases and %d payload cases match."
+          % (len(expected), submission_total, payload_total))
     return 0
 
 

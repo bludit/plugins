@@ -21,6 +21,9 @@ from urllib.error import URLError, HTTPError
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+sys.path.insert(0, HERE)
+
+from analyze import Report, check_submission  # noqa: E402
 
 SCHEMA_VERSION = 1
 MAX_ZIP_BYTES = 10 * 1024 * 1024
@@ -57,11 +60,14 @@ def build(fail_fast=False):
 
     for path in submissions():
         name = os.path.basename(path)
-        try:
-            with open(path) as fh:
-                data = json.load(fh)
-        except json.JSONDecodeError as exc:
-            failures.append("%s: invalid JSON, %s" % (name, exc))
+        # Validate again before publishing. The pull request is gated, but this
+        # is what index.json is actually generated from, so a file that reached
+        # main any other way must not be able to publish itself.
+        report = Report(name[:-5])
+        data = check_submission(path, report)
+        if data is None or report.errors:
+            for finding in report.errors:
+                failures.append("%s: [%s] %s" % (name, finding["code"], finding["message"]))
             continue
 
         # The filename is the id, the submission does not carry it
