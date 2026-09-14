@@ -1,13 +1,14 @@
 {
-  "id": "jodit",
   "name": "Jodit",
-  "description": "HTML editor for formatting content, a lightweight WYSIWYG alternative to Markdown.",
+  "description": {
+    "en": "HTML editor for formatting content, a lightweight WYSIWYG alternative to Markdown.",
+    "es": "Editor HTML para dar formato al contenido, una alternativa ligera a Markdown."
+  },
   "author": "Jodit",
   "website": "https://xdsoft.net/jodit/",
   "license": "MIT",
   "compatible": "4.0",
   "version": "4.13.10",
-  "releaseDate": "2026-07-31",
   "download": "https://github.com/bludit-extensions/plugin-jodit/releases/download/v4.13.10/jodit.zip",
   "type": "editor",
   "tags": [
