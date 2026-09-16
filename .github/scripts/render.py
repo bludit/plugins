@@ -82,7 +82,7 @@ def render(report):
     lines.append("Run the same checks locally:")
     lines.append("")
     lines.append("```")
-    lines.append("python3 scripts/analyze.py plugins/%s.json" % plugin_id)
+    lines.append("python3 .github/scripts/analyze.py plugins/%s.json" % plugin_id)
     lines.append("```")
 
     return "\n".join(lines) + "\n"

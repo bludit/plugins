@@ -26,10 +26,22 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      # Two checkouts on purpose. The pull request supplies the submissions and
+      # nothing else: running its copy of the analyzer would let a pull request
+      # weaken the check that is meant to be reading it, and the report from
+      # that run is what report.yml posts as the verdict.
       - name: Checkout the pull request
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          path: pull-request
+
+      - name: Checkout the analyzer from the base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          sparse-checkout: .github
+          path: trusted
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -50,7 +62,7 @@ jobs:
           # with --depth=1 instead would shallow the history and the diff
           # would silently come back empty once main moved on.
           BASE='${{ github.event.pull_request.base.sha }}'
-          CHANGED=$(git diff --name-only --diff-filter=d \
+          CHANGED=$(git -C pull-request diff --name-only --diff-filter=d \
             "${BASE}" HEAD -- 'plugins/*.json' | tr '\n' ' ')
           echo "files=${CHANGED}" >> "$GITHUB_OUTPUT"
           if [ -z "${CHANGED}" ]; then
@@ -69,7 +81,7 @@ jobs:
           for FILE in ${{ steps.changed.outputs.files }}; do
             NAME=$(basename "${FILE}" .json)
             echo "::group::${NAME}"
-            python3 .github/scripts/analyze.py "${FILE}" \
+            python3 trusted/.github/scripts/analyze.py "pull-request/${FILE}" \
               --report "analyzer-report/${NAME}.json" || STATUS=1
             echo "::endgroup::"
           done
