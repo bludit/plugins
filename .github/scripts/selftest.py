@@ -27,16 +27,17 @@ import sys
 from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
+INTERNAL = os.path.dirname(HERE)          # .github, the machinery
+ROOT = os.path.dirname(INTERNAL)          # the repository, where plugins/ lives
 sys.path.insert(0, HERE)
 
 import analyze  # noqa: E402
 
-CORPUS = os.path.join(ROOT, "tests", "corpus")
-EXPECTED = os.path.join(ROOT, "tests", "expected.json")
-PAYLOAD = os.path.join(ROOT, "tests", "payload")
-PAYLOAD_EXPECTED = os.path.join(ROOT, "tests", "payload-expected.json")
-SUBMISSION_EXPECTED = os.path.join(ROOT, "tests", "submission-expected.json")
+CORPUS = os.path.join(INTERNAL, "tests", "corpus")
+EXPECTED = os.path.join(INTERNAL, "tests", "expected.json")
+PAYLOAD = os.path.join(INTERNAL, "tests", "payload")
+PAYLOAD_EXPECTED = os.path.join(INTERNAL, "tests", "payload-expected.json")
+SUBMISSION_EXPECTED = os.path.join(INTERNAL, "tests", "submission-expected.json")
 
 # The guard is advisory and the corpus files do not carry it, it would only add
 # the same noise to all of them
@@ -164,7 +165,7 @@ def main():
         print("PHP is not installed, the source checks cannot run.", file=sys.stderr)
         return 1
 
-    reserved = json.load(open(os.path.join(ROOT, "rules", "reserved.json")))
+    reserved = json.load(open(os.path.join(INTERNAL, "rules", "reserved.json")))
     expected = {k: v for k, v in json.load(open(EXPECTED)).items()
                 if not k.startswith("_")}
 

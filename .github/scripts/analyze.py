@@ -21,7 +21,8 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
+INTERNAL = os.path.dirname(HERE)          # .github, the machinery
+ROOT = os.path.dirname(INTERNAL)          # the repository, where plugins/ lives
 
 MAX_ZIP_BYTES = 10 * 1024 * 1024          # keep in sync with PLUGINS_MAX_ZIP_SIZE
 MAX_UNCOMPRESSED_BYTES = 40 * 1024 * 1024  # keep in sync with PLUGINS_MAX_UNCOMPRESSED_SIZE
@@ -136,7 +137,7 @@ class Report:
 # ---------------------------------------------------------------------------
 
 def load_reserved():
-    with open(os.path.join(ROOT, "rules", "reserved.json")) as fh:
+    with open(os.path.join(INTERNAL, "rules", "reserved.json")) as fh:
         return json.load(fh)
 
 
@@ -215,7 +216,7 @@ def validate_schema(data):
     the required fields and their patterns so the script still runs locally
     without any dependency.
     """
-    with open(os.path.join(ROOT, "rules", "plugin.schema.json")) as fh:
+    with open(os.path.join(INTERNAL, "rules", "plugin.schema.json")) as fh:
         schema = json.load(fh)
 
     try:

@@ -69,7 +69,7 @@ jobs:
           for FILE in ${{ steps.changed.outputs.files }}; do
             NAME=$(basename "${FILE}" .json)
             echo "::group::${NAME}"
-            python3 scripts/analyze.py "${FILE}" \
+            python3 .github/scripts/analyze.py "${FILE}" \
               --report "analyzer-report/${NAME}.json" || STATUS=1
             echo "::endgroup::"
           done

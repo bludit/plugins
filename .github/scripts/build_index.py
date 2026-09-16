@@ -20,7 +20,8 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
+INTERNAL = os.path.dirname(HERE)          # .github, the machinery
+ROOT = os.path.dirname(INTERNAL)          # the repository, where plugins/ lives
 sys.path.insert(0, HERE)
 
 from analyze import Report, check_submission  # noqa: E402

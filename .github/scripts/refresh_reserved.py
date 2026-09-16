@@ -14,7 +14,9 @@ import os
 import re
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HERE = os.path.dirname(os.path.abspath(__file__))
+INTERNAL = os.path.dirname(HERE)          # .github, the machinery
+ROOT = os.path.dirname(INTERNAL)          # the repository
 
 
 def classes_in(pattern):
@@ -58,7 +60,7 @@ def main():
         "reservedClassNames": sorted(reserved),
     }
 
-    target = os.path.join(ROOT, "rules", "reserved.json")
+    target = os.path.join(INTERNAL, "rules", "reserved.json")
     with open(target, "w") as fh:
         json.dump(payload, fh, indent=2)
         fh.write("\n")

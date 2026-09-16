@@ -48,7 +48,7 @@ Nothing else is expected from you.
 Want to check before opening the pull request?
 
 ```bash
-python3 scripts/analyze.py plugins/hello-world.json
+python3 .github/scripts/analyze.py plugins/hello-world.json
 ```
 
 ## Building the zip
