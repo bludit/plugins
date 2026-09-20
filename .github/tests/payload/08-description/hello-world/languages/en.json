@@ -1,0 +1,6 @@
+{
+  "plugin-data": {
+    "name": "Hello World",
+    "description": "A greeting, rewritten to read better in the directory."
+  }
+}

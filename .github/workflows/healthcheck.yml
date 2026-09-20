@@ -33,7 +33,7 @@ jobs:
       - name: Check every asset
         id: check
         run: |
-          python3 scripts/healthcheck.py --index index.json --output healthcheck.md
+          python3 .github/scripts/healthcheck.py --index index.json --output healthcheck.md
           if [ -s healthcheck.md ]; then
             echo "problems=1" >> "$GITHUB_OUTPUT"
           else
