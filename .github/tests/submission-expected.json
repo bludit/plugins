@@ -1,0 +1,320 @@
+{
+  "_comment": "What check_submission must report for each case. _base is a valid submission, every case applies remove/set to a copy of it. expect is the sorted set of error codes, an empty list means the case must be accepted. Each case runs twice, with jsonschema and with the dependency free fallback, and the two have to agree.",
+  "_base": {
+    "name": "Hello World",
+    "description": {
+      "en": "Adds a friendly greeting to every page of the site."
+    },
+    "author": "Example",
+    "website": "https://example.com/hello-world",
+    "license": "MIT",
+    "compatible": "4.0",
+    "version": "1.0.0",
+    "download": "https://github.com/example/hello-world/releases/download/v1.0.0/hello-world.zip",
+    "type": "",
+    "tags": [
+      "example"
+    ]
+  },
+  "cases": {
+    "valid": {
+      "expect": []
+    },
+    "valid-paid": {
+      "expect": [],
+      "remove": [
+        "download"
+      ],
+      "set": {
+        "price_in_usd": 1.99
+      }
+    },
+    "valid-minimal": {
+      "expect": [],
+      "remove": [
+        "type",
+        "tags"
+      ]
+    },
+    "valid-many-languages": {
+      "expect": [],
+      "set": {
+        "description": {
+          "en": "Adds a friendly greeting to every page of the site.",
+          "es": "Agrega un saludo a cada pagina del sitio.",
+          "pt_BR": "Adiciona uma saudacao a cada pagina do site.",
+          "ckb": "Zor bash, salawek bo hemu laperek."
+        }
+      }
+    },
+    "no-name": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "remove": [
+        "name"
+      ]
+    },
+    "no-description": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "remove": [
+        "description"
+      ]
+    },
+    "no-author": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "remove": [
+        "author"
+      ]
+    },
+    "no-website": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "remove": [
+        "website"
+      ]
+    },
+    "no-license": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "remove": [
+        "license"
+      ]
+    },
+    "no-compatible": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "remove": [
+        "compatible"
+      ]
+    },
+    "no-version": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "remove": [
+        "version"
+      ]
+    },
+    "no-english-description": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "set": {
+        "description": {
+          "es": "Solo espanol, sin ingles."
+        }
+      }
+    },
+    "website-not-https": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "set": {
+        "website": "http://example.com/x"
+      }
+    },
+    "compatible-no-minor": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "set": {
+        "compatible": "4"
+      }
+    },
+    "version-empty": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "set": {
+        "version": ""
+      }
+    },
+    "name-too-short": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "set": {
+        "name": "x"
+      }
+    },
+    "description-too-long": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "set": {
+        "description": {
+          "en": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        }
+      }
+    },
+    "description-newline": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "set": {
+        "description": {
+          "en": "Two\nlines of text here."
+        }
+      }
+    },
+    "description-is-string": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "set": {
+        "description": "A plain string, the old shape."
+      }
+    },
+    "download-generated-archive": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "set": {
+        "download": "https://github.com/example/hello-world/archive/main.zip"
+      }
+    },
+    "download-other-host": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "set": {
+        "download": "https://gitlab.com/example/hello-world/releases/download/v1/hello-world.zip"
+      }
+    },
+    "type-unknown": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "set": {
+        "type": "widget"
+      }
+    },
+    "tag-not-a-slug": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "set": {
+        "tags": [
+          "Not A Slug"
+        ]
+      }
+    },
+    "too-many-tags": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "set": {
+        "tags": [
+          "a",
+          "b",
+          "c",
+          "d",
+          "e",
+          "f",
+          "g",
+          "h",
+          "i"
+        ]
+      }
+    },
+    "unknown-field": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "set": {
+        "donations": "https://example.com/tip"
+      }
+    },
+    "price-as-string": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "remove": [
+        "download"
+      ],
+      "set": {
+        "price_in_usd": "1.99"
+      }
+    },
+    "price-negative": {
+      "expect": [
+        "SCHEMA"
+      ],
+      "remove": [
+        "download"
+      ],
+      "set": {
+        "price_in_usd": -5
+      }
+    },
+    "price-and-download": {
+      "expect": [
+        "PRICE_DOWNLOAD"
+      ],
+      "set": {
+        "price_in_usd": 5
+      }
+    },
+    "no-download-no-price": {
+      "expect": [
+        "DOWNLOAD_MISSING"
+      ],
+      "remove": [
+        "download"
+      ]
+    },
+    "id-supplied": {
+      "expect": [
+        "FIELD_DERIVED",
+        "SCHEMA"
+      ],
+      "set": {
+        "id": "hello-world"
+      }
+    },
+    "sha256-supplied": {
+      "expect": [
+        "FIELD_DERIVED",
+        "SCHEMA"
+      ],
+      "set": {
+        "sha256": "deadbeef"
+      }
+    },
+    "size-supplied": {
+      "expect": [
+        "FIELD_DERIVED",
+        "SCHEMA"
+      ],
+      "set": {
+        "size": 1024
+      }
+    },
+    "filename-uppercase": {
+      "expect": [
+        "ID_FILENAME"
+      ],
+      "filename": "Hello-World.json"
+    },
+    "filename-underscore": {
+      "expect": [
+        "ID_FILENAME"
+      ],
+      "filename": "hello_world.json"
+    },
+    "id-bundled": {
+      "expect": [
+        "ID_BUNDLED"
+      ],
+      "filename": "about.json"
+    }
+  }
+}

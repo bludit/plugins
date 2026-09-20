@@ -1,0 +1,6 @@
+{
+  "plugin-data": {
+    "name": "Hello World",
+    "description": "Adds a friendly greeting to every page of the site."
+  }
+}
