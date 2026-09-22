@@ -1,5 +1,27 @@
 {
   "schema": 1,
-  "generated": "2026-08-27T21:17:00Z",
-  "plugins": []
+  "generated": "2026-09-22T14:20:34Z",
+  "plugins": [
+    {
+      "id": "jodit",
+      "name": "Jodit",
+      "description": {
+        "en": "HTML editor for formatting content, a lightweight WYSIWYG alternative to Markdown.",
+        "es": "Editor HTML para dar formato al contenido, una alternativa ligera a Markdown."
+      },
+      "author": "Jodit",
+      "website": "https://xdsoft.net/jodit/",
+      "license": "MIT",
+      "compatible": "4.0",
+      "version": "4.13.10",
+      "download": "https://github.com/bludit-extensions/plugin-jodit/releases/download/v4.13.10/jodit.zip",
+      "type": "editor",
+      "tags": [
+        "editor",
+        "wysiwyg"
+      ],
+      "sha256": "478bcd8b25ea1e1f600204826306ad4abb0f6337740beb72863fc7548fa9f2d6",
+      "size": 266944
+    }
+  ]
 }
