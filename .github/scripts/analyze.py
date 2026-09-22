@@ -92,7 +92,13 @@ class Report:
         self.findings = []
         self.passed = []
 
-    def add(self, severity, code, message, hint="", file="", line=0):
+    def add(self, severity, code, message, hint="", file="", line=0, detail=None):
+        """message is what is wrong, hint is what to do about it.
+
+        detail is an optional list of (label, value) pairs, for a finding that
+        is about two values disagreeing. Putting them on their own lines is the
+        difference between a comparison somebody can read and one they cannot.
+        """
         self.findings.append({
             "severity": severity,
             "code": code,
@@ -100,6 +106,7 @@ class Report:
             "line": line,
             "message": message,
             "hint": hint,
+            "detail": [list(pair) for pair in (detail or [])],
         })
 
     def ok(self, label):
@@ -197,8 +204,9 @@ def check_submission(path, report):
     reserved = load_reserved()
     if plugin_id in reserved["bundledPluginIds"]:
         report.error("ID_BUNDLED",
-                     "`%s` is a plugin bundled with Bludit." % plugin_id,
-                     "Bundled plugins are not listed in the directory. Choose another id.", file=path)
+                     "`%s` is the id of a plugin that ships with Bludit" % plugin_id,
+                     "Every site already has it, so the directory does not list it, and installing "
+                     "over it would replace part of Bludit. Rename the file to a free id.", file=path)
 
     # Two submissions cannot share an id any more, the id is the filename and
     # the filesystem keeps those unique, so there is nothing left to check here
@@ -455,7 +463,7 @@ def check_structure(root, submission, report):
             if name in junk:
                 relative = os.path.relpath(os.path.join(current, name), root)
                 report.warning("ZIP_JUNK",
-                               "`%s` should not be in the released zip." % relative,
+                               "Development file, should not be in the released zip",
                                "Exclude development files from the release asset.", file=relative)
 
     metadata_path = os.path.join(root, "metadata.json")
@@ -472,8 +480,12 @@ def check_structure(root, submission, report):
 
     for field in METADATA_REQUIRED:
         if not metadata.get(field):
-            report.error("META_INCOMPLETE", "`metadata.json` has no `%s`." % field,
-                         "Bludit refuses to install a plugin without it.", file="metadata.json")
+            report.error("META_INCOMPLETE",
+                         "The plugin has no `%s` in its `metadata.json`" % field,
+                         "Bludit reads that file to decide whether it can install the plugin, and "
+                         "refuses when either `version` or `compatible` is missing. Add it and "
+                         "publish a new release.",
+                         file="%s/metadata.json" % plugin_id)
 
     # The submission is what gets listed either way. A difference is reported so
     # a maintainer can see it, it never changes what goes into index.json.
@@ -482,18 +494,23 @@ def check_structure(root, submission, report):
             continue
         if metadata[field] != submission.get(field):
             report.warning("META_MISMATCH",
-                           "`%s` differs: the submission says `%s`, `metadata.json` says `%s`."
-                           % (field, submission.get(field), metadata[field]),
-                           "The submission is what the directory lists. Say in the pull request "
-                           "which one is right.", file="metadata.json")
+                           "`%s` does not match the plugin" % field,
+                           "The directory lists the first one. The second is what your plugin "
+                           "actually ships, and it is what Bludit shows once the plugin is "
+                           "installed. Make them the same, or say in this pull request which "
+                           "one is right.",
+                           detail=[("plugins/%s.json" % plugin_id, submission.get(field)),
+                                   ("%s/metadata.json" % plugin_id, metadata[field])])
 
     # An absent type means a regular plugin, which the submission writes as ""
     if metadata.get("type", "") != submission.get("type", ""):
         report.warning("META_MISMATCH",
-                       "`type` differs: the submission says `%s`, `metadata.json` says `%s`."
-                       % (submission.get("type", ""), metadata.get("type", "")),
-                       "Leave both empty for a regular plugin, or set the same value in both.",
-                       file="metadata.json")
+                       "`type` does not match the plugin",
+                       "`editor` puts the plugin in the editor list, `theme` in the themes, and "
+                       "empty is an ordinary plugin. Set the same value in both, or leave it out "
+                       "of both.",
+                       detail=[("plugins/%s.json" % plugin_id, submission.get("type", "") or "(empty)"),
+                               ("%s/metadata.json" % plugin_id, metadata.get("type", "") or "(not set)")])
 
     language_path = os.path.join(root, "languages", "en.json")
     if not os.path.isfile(language_path):
@@ -521,12 +538,13 @@ def check_structure(root, submission, report):
                                       ("description", english)):
                     if data[field] != listed:
                         report.warning("LANG_MISMATCH",
-                                       "`%s` differs: the submission says `%s`, "
-                                       "`languages/en.json` says `%s`."
-                                       % (field, listed, data[field]),
-                                       "The directory lists the submission, Bludit shows this file "
-                                       "once the plugin is installed. A visitor would read two "
-                                       "different texts.", file="languages/en.json")
+                                       "The English %s does not match the plugin" % field,
+                                       "Somebody browsing the directory reads the first one, and "
+                                       "then sees the second once they install the plugin. Make "
+                                       "them the same, or say in this pull request which one is "
+                                       "right.",
+                                       detail=[("plugins/%s.json" % plugin_id, listed),
+                                               ("%s/languages/en.json" % plugin_id, data[field])])
 
     # The directory inside the zip should carry the plugin id
     if root != os.path.dirname(root) and os.path.basename(root) not in ("", plugin_id):
@@ -541,8 +559,12 @@ def check_structure(root, submission, report):
             if os.path.getsize(path) > MAX_ASSET_BYTES and name.endswith((".js", ".css")):
                 relative = os.path.relpath(path, root)
                 report.info("ASSET_LARGE",
-                            "`%s` is %d KB." % (relative, os.path.getsize(path) // 1024),
-                            "Large vendored assets make every install slower.", file=relative)
+                            "%d KB, everything over %d KB gets flagged here"
+                            % (os.path.getsize(path) // 1024, MAX_ASSET_BYTES // 1024),
+                            "Not a problem, only something to know: every install downloads "
+                            "it. Shipping a minified build, or dropping the parts of the "
+                            "library the plugin does not use, is usually where the weight is.",
+                            file=relative)
 
     if not any(f["code"].startswith(("META_", "LANG_")) and f["severity"] == "error"
                for f in report.findings):
@@ -580,7 +602,7 @@ def check_source(root, report):
         if lint.returncode != 0:
             message = (lint.stdout + lint.stderr).strip().splitlines()
             detail = message[0] if message else "syntax error"
-            report.error("SRC_PARSE", "`%s` does not parse: %s" % (relative, re.sub(r' in /.*', '', detail)),
+            report.error("SRC_PARSE", "Does not parse: %s" % re.sub(r' in /.*', '', detail),
                          "A plugin that does not parse takes down the whole site, not only the plugin.",
                          file=relative)
             lint_failed = True
@@ -593,9 +615,10 @@ def check_source(root, report):
         # directly. Worth suggesting, never worth blocking a merge.
         if not re.search(r"defined\s*\(\s*['\"]BLUDIT['\"]\s*\)", source[:400]):
             report.info("SRC_NO_GUARD",
-                        "`%s` does not start with the Bludit guard." % relative,
-                        "Optional. Adding `<?php defined('BLUDIT') or die('Bludit CMS.');` as the "
-                        "first line stops the file being requested directly over HTTP.",
+                        "No Bludit guard on the first line",
+                        "Optional, and worth doing. Without it the file can be requested "
+                        "directly over HTTP rather than only running as part of Bludit. Start it "
+                        "with `<?php defined('BLUDIT') or die('Bludit CMS.');`.",
                         file=relative, line=1)
 
         tokens = tokenize(php, path)
@@ -656,8 +679,9 @@ def scan_tokens(tokens, relative, reserved, report):
         # same for the backtick operator which is a shell call
         if name == "T_EVAL":
             report.error("SRC_EVAL",
-                         "`%s` uses `eval()` on line %d." % (relative, line),
-                         "There is no legitimate use for this in a plugin listed in the directory.",
+                         "Uses `eval()`",
+                         "There is no legitimate use for this in a plugin listed in the directory, "
+                         "it runs whatever string it is handed. Rewrite it without this call.",
                          file=relative, line=line)
             continue
 
@@ -667,7 +691,7 @@ def scan_tokens(tokens, relative, reserved, report):
             inside_backticks = not inside_backticks
             if inside_backticks:
                 report.error("SRC_SHELL",
-                             "`%s` runs a shell command with backticks on line %d." % (relative, line),
+                             "Runs a shell command with backticks",
                              "There is no legitimate use for this in a plugin listed in the directory.",
                              file=relative, line=line)
             continue
@@ -681,14 +705,13 @@ def scan_tokens(tokens, relative, reserved, report):
             tainted = [t for t in variables if t["text"] in SUPERGLOBALS]
             if tainted:
                 report.error("SRC_DYNAMIC_INCLUDE",
-                             "`%s` includes a path taken from `%s` on line %d."
-                             % (relative, tainted[0]["text"], line),
+                             "Includes a file path taken from `%s`" % tainted[0]["text"],
                              "Request data must never reach include or require, that is a remote "
                              "code execution. Include a fixed path instead.",
                              file=relative, line=line)
             elif variables:
                 report.warning("SRC_DYNAMIC_INCLUDE",
-                               "`%s` includes a computed path on line %d." % (relative, line),
+                               "Includes a path that is built at runtime",
                                "Fine when the path is built from constants such as `PATH_PLUGINS`. "
                                "Please say in the pull request what it loads.",
                                file=relative, line=line)
@@ -703,14 +726,13 @@ def scan_tokens(tokens, relative, reserved, report):
                 continue
             if text in assembled:
                 report.error("SRC_DYNAMIC_CALL",
-                             "`%s` calls `%s()`, a function name assembled at runtime, on line %d."
-                             % (relative, text, line),
+                             "Calls `%s()`, a function name assembled at runtime" % text,
                              "Building a function name from pieces hides which function is called "
                              "and defeats every other check here. Call it by its name.",
                              file=relative, line=line)
             else:
                 report.warning("SRC_DYNAMIC_CALL",
-                               "`%s` calls the variable `%s()` on line %d." % (relative, text, line),
+                               "Calls whatever is in the variable `%s`" % text,
                                "Fine for a closure. Please say in the pull request what it calls.",
                                file=relative, line=line)
             continue
@@ -754,44 +776,51 @@ def scan_tokens(tokens, relative, reserved, report):
                        if t["name"] == "T_VARIABLE" and t["text"] in SUPERGLOBALS]
             if tainted:
                 report.error("SRC_UNSERIALIZE",
-                             "`%s` unserializes `%s` on line %d." % (relative, tainted[0]["text"], line),
+                             "Unserializes `%s`, which a visitor controls" % tainted[0]["text"],
                              "Unserializing request data lets a visitor build any object in Bludit. "
                              "Use `json_decode()` instead.",
                              file=relative, line=line)
             else:
                 report.warning("SRC_UNSERIALIZE",
-                               "`%s` calls `unserialize()` on line %d." % (relative, line),
+                               "Calls `unserialize()`",
                                "Safe only when the data is yours. Prefer `json_decode()`.",
                                file=relative, line=line)
             continue
 
         if lowered in BANNED_CALLS:
             report.error(BANNED_CALLS[lowered],
-                         "`%s` calls `%s()` on line %d." % (relative, text, line),
-                         "There is no legitimate use for this in a plugin listed in the directory.",
+                         "Calls `%s()`" % text,
+                         "There is no legitimate use for this in a plugin listed in the directory, "
+                         "it runs whatever it is given. Rewrite it without this call.",
                          file=relative, line=line)
         elif lowered in DECODERS:
             decoders_seen.add(lowered)
         elif lowered in REVIEW_CALLS:
             report.warning(REVIEW_CALLS[lowered],
-                           "`%s` calls `%s()` on line %d." % (relative, text, line),
-                           "Legitimate for some plugins. Please say in the pull request why it is needed.",
+                           "Calls `%s()`" % text,
+                           "Legitimate for some plugins, and worth a second pair of eyes. Say in "
+                           "this pull request what it is for and the review will be quick.",
                            file=relative, line=line)
         elif lowered == "file_get_contents" and _reads_remote(items, index):
             report.warning("SRC_REMOTE_HTTP",
-                           "`%s` reads a remote URL on line %d." % (relative, line),
-                           "Please say in the pull request what it contacts and why.",
+                           "Reads a remote URL with `file_get_contents()`",
+                           "Plugins are allowed to talk to the network, a sitemap pinging a search "
+                           "engine for instance. Say in this pull request which host it contacts "
+                           "and what it sends.",
                            file=relative, line=line)
 
     if len(decoders_seen) > 1:
         report.error("SRC_OBFUSCATION",
-                     "`%s` combines %s." % (relative, " and ".join(sorted("`%s()`" % d for d in decoders_seen))),
-                     "Chained decoding is the shape of hidden code. Ship readable source.",
+                     "Combines %s in the same file"
+                     % " and ".join(sorted("`%s()`" % d for d in decoders_seen)),
+                     "One decoder can be ordinary, several chained together is how code is hidden "
+                     "from a reader. Ship the source in a form a person can read.",
                      file=relative)
     elif decoders_seen:
         report.warning("SRC_DECODER",
-                       "`%s` uses %s." % (relative, ", ".join(sorted("`%s()`" % d for d in decoders_seen))),
-                       "Fine for real data, suspicious when it hides code.",
+                       "Uses %s" % ", ".join(sorted("`%s()`" % d for d in decoders_seen)),
+                       "Ordinary when it decodes data, a problem when it hides code. Say in this "
+                       "pull request what is being decoded.",
                        file=relative)
 
     _scan_echoed_input(items, relative, report)
@@ -862,9 +891,10 @@ def _scan_echoed_input(items, relative, report):
                 window = " ".join(t["text"] for t in items[max(0, index - 2):offset])
                 if "Sanitize" not in window and "htmlspecialchars" not in window:
                     report.warning("SRC_ECHO_INPUT",
-                                   "`%s` prints `%s` directly on line %d."
-                                   % (relative, items[offset]["text"], items[offset]["line"]),
-                                   "Pass it through `Sanitize::html()` first, otherwise it is an XSS.",
+                                   "Prints `%s` straight to the page" % items[offset]["text"],
+                                   "Anything a visitor puts in the URL ends up in the HTML as it "
+                                   "is, so a crafted link can run script on your site. Wrap it in "
+                                   "`Sanitize::html()`.",
                                    file=relative, line=items[offset]["line"])
                 break
 
