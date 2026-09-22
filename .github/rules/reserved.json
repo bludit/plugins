@@ -1,5 +1,5 @@
 {
-  "_comment": "Names already used by Bludit core. A plugin in the directory must not collide with any of these. Regenerate with scripts/refresh_reserved.py against a Bludit checkout.",
+  "_comment": "Names already used by Bludit core. A plugin in the directory must not collide with any of these. Regenerate with .github/scripts/refresh_reserved.py against a Bludit checkout.",
   "bluditVersion": "4.0.0-beta-1",
   "bundledPluginIds": [
     "about",
