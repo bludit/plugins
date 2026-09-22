@@ -59,19 +59,11 @@ def render(report):
             continue
         lines.append("### %s" % TITLES[severity])
         lines.append("")
+        # The same rule firing twice would otherwise repeat its whole paragraph
+        # of advice, which buries the findings themselves
+        seen = set()
         for finding in group:
-            head = "**%s" % escape(finding["message"])
-            if not head.endswith("**"):
-                head += "**"
-            where = location(finding)
-            if where:
-                head = "**%s** — %s" % (where.strip("`"), escape(finding["message"]))
-                head = head.replace("**%s**" % where.strip("`"), "**`%s`**" % where.strip("`"), 1)
-            lines.append("%s &nbsp;`%s`" % (head, escape(finding["code"])))
-            hint = escape(finding.get("hint"))
-            if hint:
-                lines.append(hint)
-            lines.append("")
+            lines.extend(block(finding, seen))
 
     passed = report.get("passed") or []
     if passed:
@@ -86,6 +78,35 @@ def render(report):
     lines.append("```")
 
     return "\n".join(lines) + "\n"
+
+
+def block(finding, seen=None):
+    """One finding: what is wrong, the values it is about, what to do.
+
+    Keeping those three apart is the whole point. A finding that reads as one
+    long sentence with two quoted paragraphs inside it cannot be scanned, and
+    the reader has to work out for themselves which half they are supposed to
+    change.
+    """
+    where = location(finding)
+    message = escape(finding["message"])
+    head = "**%s — %s**" % (where, message) if where else "**%s**" % message
+
+    lines = ["%s &nbsp;`%s`" % (head, escape(finding["code"])), ""]
+
+    for label, value in finding.get("detail") or []:
+        lines.append("- `%s` — %s" % (escape(label), escape(value)))
+    if finding.get("detail"):
+        lines.append("")
+
+    hint = escape(finding.get("hint"))
+    if hint and (seen is None or hint not in seen):
+        if seen is not None:
+            seen.add(hint)
+        lines.append(hint)
+        lines.append("")
+
+    return lines
 
 
 def summary(errors, warnings, infos):
