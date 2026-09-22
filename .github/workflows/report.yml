@@ -63,7 +63,7 @@ jobs:
 
           python3 - <<'PYTHON' > comment.md
           import glob, json, os, sys
-          sys.path.insert(0, 'scripts')
+          sys.path.insert(0, '.github/scripts')
           from render import render, MARKER
 
           reports = sorted(p for p in glob.glob('analyzer-report/*.json'))
